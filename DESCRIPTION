@@ -1,0 +1,10 @@
+Package: seroCOP-api
+Type: Plumber API
+Title: Minimal API for seroCOP Model Fitting
+Version: 0.1.0
+Authors@R: person(given = "Sero", family = "Analytics", role = c("aut","cre"), email = "", comment = c())
+Description: A lightweight Plumber API that exposes a /fit endpoint to run brms-based seroCOP fits on a server and return JSON summaries and plots.
+Depends: R (>= 4.2)
+Imports: plumber, jsonlite, readr, dplyr, tidyr, ggplot2, brms, loo, pROC, base64enc, seroCOP
+Encoding: UTF-8
+RoxygenNote: 7.3.1
