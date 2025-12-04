@@ -1,12 +1,6 @@
 # plumber.R — entrypoint
 # Run with: R -e "pr <- plumber::plumb('plumber.R'); pr$run(host='0.0.0.0', port=8001)"
 
-#* @plumber
-function(pr) {
-  pr$setParser("multi", plumber::parser_multi)
-  pr
-}
-
 library(plumber)
 library(jsonlite)
 library(readr)
@@ -71,29 +65,55 @@ safe_auc <- function(labels, probs){
 #* @param iter Iterations per chain
 #* @post /fit
 #* @serializer unboxedJSON
-#* @parser multi
 function(req, res, infected_col="infected", titre_col=NULL, family="bernoulli", chains=2, iter=1000){
   tryCatch({
-    # Get the uploaded CSV file
-    if(is.null(req$body) || is.null(req$body$csv)){
+    # Get the uploaded CSV file from the raw POST body
+    if(is.null(req$postBody) || length(req$postBody) == 0){
       res$status <- 400
-      return(list(error="Missing file 'csv' in multipart upload"))
+      return(list(error="No file data received"))
     }
     
-    csv_data <- req$body$csv
-    
-    # csv_data should be raw bytes or a path
-    if(is.raw(csv_data)){
-      # Write raw data to temp file
-      csv_path <- tempfile(fileext = ".csv")
-      writeBin(csv_data, csv_path)
-    } else if(is.character(csv_data)) {
-      # It's already a file path
-      csv_path <- csv_data
-    } else {
+    # Parse multipart form data manually
+    content_type <- req$HTTP_CONTENT_TYPE
+    if(!grepl("multipart/form-data", content_type, fixed=TRUE)){
       res$status <- 400
-      return(list(error=paste("Unexpected csv data type:", class(csv_data))))
+      return(list(error="Expected multipart/form-data content type"))
     }
+    
+    # Extract boundary from content type
+    boundary_match <- regexpr("boundary=([^;]+)", content_type)
+    if(boundary_match == -1){
+      res$status <- 400
+      return(list(error="No boundary found in content type"))
+    }
+    boundary <- sub("boundary=", "", regmatches(content_type, boundary_match))
+    
+    # Split postBody by boundary to find CSV part
+    post_text <- rawToChar(req$postBody)
+    parts <- strsplit(post_text, paste0("--", boundary))[[1]]
+    
+    csv_content <- NULL
+    for(part in parts){
+      if(grepl('name="csv"', part, fixed=TRUE)){
+        # Extract content after headers (double newline)
+        content_start <- regexpr("\r\n\r\n", part)
+        if(content_start > 0){
+          csv_content <- substring(part, content_start + 4)
+          # Remove trailing boundary markers
+          csv_content <- sub("\r\n$", "", csv_content)
+          break
+        }
+      }
+    }
+    
+    if(is.null(csv_content)){
+      res$status <- 400
+      return(list(error="Could not find CSV file in multipart data"))
+    }
+    
+    # Write to temp file and read
+    csv_path <- tempfile(fileext = ".csv")
+    writeLines(csv_content, csv_path)
     
     cat("Reading CSV file from:", csv_path, "\n")
     df <- readr::read_csv(csv_path, show_col_types = FALSE)
