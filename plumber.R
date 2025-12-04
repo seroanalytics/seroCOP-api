@@ -1,6 +1,12 @@
 # plumber.R — entrypoint
 # Run with: R -e "pr <- plumber::plumb('plumber.R'); pr$run(host='0.0.0.0', port=8001)"
 
+#* @plumber
+function(pr) {
+  pr %>%
+    pr_set_parsers(c("json", "multi", "text"))
+}
+
 library(plumber)
 library(jsonlite)
 library(readr)
@@ -58,23 +64,39 @@ safe_auc <- function(labels, probs){
 }
 
 #* Fit seroCOP model
-#* @param csv:file The CSV file (multipart/form-data)
 #* @param infected_col The name of the binary outcome column (default "infected")
 #* @param titre_col The biomarker/titre column for single-biomarker fits (optional)
 #* @param family Logistic by default; currently only binary
 #* @param chains Number of chains
 #* @param iter Iterations per chain
 #* @post /fit
-function(req, res, csv, infected_col="infected", titre_col=NULL, family="bernoulli", chains=2, iter=1000){
+#* @serializer unboxedJSON
+#* @parser multi
+function(req, res, infected_col="infected", titre_col=NULL, family="bernoulli", chains=2, iter=1000){
   tryCatch({
-    # Expect multipart form with 'csv' file
-    if(is.null(csv)){
+    # Get the uploaded CSV file
+    if(is.null(req$body) || is.null(req$body$csv)){
       res$status <- 400
-      return(list(error="Missing file 'csv'"))
+      return(list(error="Missing file 'csv' in multipart upload"))
     }
     
-    cat("Reading CSV file...\n")
-    df <- readr::read_csv(csv, show_col_types = FALSE)
+    csv_data <- req$body$csv
+    
+    # csv_data should be raw bytes or a path
+    if(is.raw(csv_data)){
+      # Write raw data to temp file
+      csv_path <- tempfile(fileext = ".csv")
+      writeBin(csv_data, csv_path)
+    } else if(is.character(csv_data)) {
+      # It's already a file path
+      csv_path <- csv_data
+    } else {
+      res$status <- 400
+      return(list(error=paste("Unexpected csv data type:", class(csv_data))))
+    }
+    
+    cat("Reading CSV file from:", csv_path, "\n")
+    df <- readr::read_csv(csv_path, show_col_types = FALSE)
     cat("Data loaded:", nrow(df), "rows,", ncol(df), "cols\n")
     cat("Column names:", paste(names(df), collapse=", "), "\n")
     
