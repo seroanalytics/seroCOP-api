@@ -58,20 +58,20 @@ safe_auc <- function(labels, probs){
 }
 
 #* Fit seroCOP model
-#* @param csv:body The CSV file (multipart/form-data)
+#* @param csv:file The CSV file (multipart/form-data)
 #* @param infected_col The name of the binary outcome column (default "infected")
 #* @param titre_col The biomarker/titre column for single-biomarker fits (optional)
 #* @param family Logistic by default; currently only binary
 #* @param chains Number of chains
 #* @param iter Iterations per chain
 #* @post /fit
-function(req, res, infected_col="infected", titre_col=NULL, family="bernoulli", chains=2, iter=1000){
+function(req, res, csv, infected_col="infected", titre_col=NULL, family="bernoulli", chains=2, iter=1000){
   # Expect multipart form with 'csv' file
-  if(is.null(req$files$csv$datapath)){
+  if(is.null(csv)){
     res$status <- 400
     return(list(error="Missing file 'csv'"))
   }
-  df <- readr::read_csv(req$files$csv$datapath, show_col_types = FALSE)
+  df <- readr::read_csv(csv, show_col_types = FALSE)
   if(!infected_col %in% names(df)){
     res$status <- 400
     return(list(error=sprintf("Missing infected_col '%s' in data", infected_col)))
