@@ -88,8 +88,14 @@ function(req, res, infected_col="infected", titre_col=NULL, family="bernoulli", 
     }
     boundary <- sub("boundary=", "", regmatches(content_type, boundary_match))
     
+    # Convert to character if raw
+    if(is.raw(req$postBody)){
+      post_text <- rawToChar(req$postBody)
+    } else {
+      post_text <- as.character(req$postBody)
+    }
+    
     # Split postBody by boundary to find CSV part
-    post_text <- rawToChar(req$postBody)
     parts <- strsplit(post_text, paste0("--", boundary))[[1]]
     
     csv_content <- NULL
