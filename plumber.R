@@ -3,8 +3,8 @@
 
 #* @plumber
 function(pr) {
-  pr %>%
-    pr_set_parsers(c("json", "multi", "text"))
+  pr$setParser("multi", plumber::parser_multi)
+  pr
 }
 
 library(plumber)
