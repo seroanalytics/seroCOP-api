@@ -66,86 +66,104 @@ safe_auc <- function(labels, probs){
 #* @param iter Iterations per chain
 #* @post /fit
 function(req, res, csv, infected_col="infected", titre_col=NULL, family="bernoulli", chains=2, iter=1000){
-  # Expect multipart form with 'csv' file
-  if(is.null(csv)){
-    res$status <- 400
-    return(list(error="Missing file 'csv'"))
-  }
-  df <- readr::read_csv(csv, show_col_types = FALSE)
-  if(!infected_col %in% names(df)){
-    res$status <- 400
-    return(list(error=sprintf("Missing infected_col '%s' in data", infected_col)))
-  }
-  df <- df |> dplyr::mutate(!!infected_col := as.integer(.data[[infected_col]]))
-
-  # Determine titre column for single-biomarker fitting
-  if(is.null(titre_col)){
-    # Pick first numeric biomarker column excluding infected_col
-    candidates <- names(df)[sapply(df, is.numeric)]
-    candidates <- setdiff(candidates, infected_col)
-    if(length(candidates) == 0){
+  tryCatch({
+    # Expect multipart form with 'csv' file
+    if(is.null(csv)){
       res$status <- 400
-      return(list(error="No numeric biomarker/titre column found"))
+      return(list(error="Missing file 'csv'"))
     }
-    titre_col <- candidates[[1]]
-  }
-  if(!titre_col %in% names(df)){
-    res$status <- 400
-    return(list(error=sprintf("Missing titre_col '%s' in data", titre_col)))
-  }
+    
+    cat("Reading CSV file...\n")
+    df <- readr::read_csv(csv, show_col_types = FALSE)
+    cat("Data loaded:", nrow(df), "rows,", ncol(df), "cols\n")
+    cat("Column names:", paste(names(df), collapse=", "), "\n")
+    
+    if(!infected_col %in% names(df)){
+      res$status <- 400
+      return(list(error=sprintf("Missing infected_col '%s' in data", infected_col)))
+    }
+    df <- df |> dplyr::mutate(!!infected_col := as.integer(.data[[infected_col]]))
 
-  # Build a simple brms formula analogous to SeroCOP single biomarker
-  form <- stats::as.formula(sprintf("%s ~ s(%s)", infected_col, titre_col))
+    # Determine titre column for single-biomarker fitting
+    if(is.null(titre_col)){
+      # Pick first numeric biomarker column excluding infected_col
+      candidates <- names(df)[sapply(df, is.numeric)]
+      candidates <- setdiff(candidates, infected_col)
+      if(length(candidates) == 0){
+        res$status <- 400
+        return(list(error="No numeric biomarker/titre column found"))
+      }
+      titre_col <- candidates[[1]]
+    }
+    if(!titre_col %in% names(df)){
+      res$status <- 400
+      return(list(error=sprintf("Missing titre_col '%s' in data", titre_col)))
+    }
+    
+    cat("Using titre column:", titre_col, "\n")
 
-  # Fit via brms (backend is Stan, runs on server)
-  fit <- brms::brm(
-    formula = form,
-    data = df,
-    family = brms::bernoulli(link = "logit"),
-    chains = as.integer(chains),
-    iter = as.integer(iter),
-    cores = max(1L, parallel::detectCores() - 1L),
-    refresh = 0
-  )
+    # Build a simple brms formula analogous to SeroCOP single biomarker
+    form <- stats::as.formula(sprintf("%s ~ s(%s)", infected_col, titre_col))
+    cat("Fitting model with formula:", deparse(form), "\n")
 
-  # Extract posterior draws and summaries
-  draws <- brms::as_draws_df(fit)
-  summ <- brms::posterior_summary(fit)
-  loo_res <- tryCatch({
-    brms::loo(fit)
-  }, error=function(e) NULL)
-
-  # Protection curve: predicted probability over a grid of titre
-  grid <- data.frame(!!titre_col := seq(min(df[[titre_col]], na.rm=TRUE),
-                                       max(df[[titre_col]], na.rm=TRUE), length.out=100))
-  preds <- brms::posterior_epred(fit, newdata = grid)
-  mean_prob <- colMeans(preds)
-  prot_df <- data.frame(titre = grid[[titre_col]], prob = mean_prob)
-  prot_plot <- ggplot(prot_df, aes(x=titre, y=prob)) +
-    geom_line(color="#111") +
-    theme_minimal(base_family = "Avenir") +
-    labs(title="Protection Curve", y="P(Infected)")
-
-  # ROC
-  fitted_probs <- brms::posterior_epred(fit, newdata=df)
-  avg_prob <- rowMeans(fitted_probs)
-  auc <- safe_auc(df[[infected_col]], avg_prob)
-
-  # Package response
-  list(
-    meta = list(
-      infected_col = infected_col,
-      titre_col = titre_col,
+    # Fit via brms (backend is Stan, runs on server)
+    fit <- brms::brm(
+      formula = form,
+      data = df,
+      family = brms::bernoulli(link = "logit"),
       chains = as.integer(chains),
       iter = as.integer(iter),
-      n = nrow(df),
-      auc = auc,
-      loo = if(!is.null(loo_res)) list(elpd = loo_res$estimates["elpd_loo","Estimate"],
-                                       p_loo = loo_res$estimates["p_loo","Estimate"]) else NULL
-    ),
-    summaries = summ |> tibble::as_tibble() |> dplyr::mutate(term = rownames(summ)) |> jsonlite::toJSON(auto_unbox = TRUE),
-    protection_curve = prot_df,
-    protection_curve_plot = serialize_plot(prot_plot),
-    posterior_draws = head(draws, 1000) # downsample for payload size
-  )
+      cores = max(1L, parallel::detectCores() - 1L),
+      refresh = 0
+    )
+    
+    cat("Model fit complete\n")
+
+    # Extract posterior draws and summaries
+    draws <- brms::as_draws_df(fit)
+    summ <- brms::posterior_summary(fit)
+    loo_res <- tryCatch({
+      brms::loo(fit)
+    }, error=function(e) NULL)
+
+    # Protection curve: predicted probability over a grid of titre
+    grid <- data.frame(!!titre_col := seq(min(df[[titre_col]], na.rm=TRUE),
+                                         max(df[[titre_col]], na.rm=TRUE), length.out=100))
+    preds <- brms::posterior_epred(fit, newdata = grid)
+    mean_prob <- colMeans(preds)
+    prot_df <- data.frame(titre = grid[[titre_col]], prob = mean_prob)
+    prot_plot <- ggplot(prot_df, aes(x=titre, y=prob)) +
+      geom_line(color="#111") +
+      theme_minimal(base_family = "Avenir") +
+      labs(title="Protection Curve", y="P(Infected)")
+
+    # ROC
+    fitted_probs <- brms::posterior_epred(fit, newdata=df)
+    avg_prob <- rowMeans(fitted_probs)
+    auc <- safe_auc(df[[infected_col]], avg_prob)
+
+    # Package response
+    list(
+      meta = list(
+        infected_col = infected_col,
+        titre_col = titre_col,
+        chains = as.integer(chains),
+        iter = as.integer(iter),
+        n = nrow(df),
+        auc = auc,
+        loo = if(!is.null(loo_res)) list(elpd = loo_res$estimates["elpd_loo","Estimate"],
+                                         p_loo = loo_res$estimates["p_loo","Estimate"]) else NULL
+      ),
+      summaries = summ |> tibble::as_tibble() |> dplyr::mutate(term = rownames(summ)) |> jsonlite::toJSON(auto_unbox = TRUE),
+      protection_curve = prot_df,
+      protection_curve_plot = serialize_plot(prot_plot),
+      posterior_draws = head(draws, 1000) # downsample for payload size
+    )
+  }, error = function(e) {
+    cat("ERROR:", e$message, "\n")
+    cat("Traceback:\n")
+    print(e)
+    res$status <- 500
+    return(list(error = paste("Server error:", e$message)))
+  })
 }
