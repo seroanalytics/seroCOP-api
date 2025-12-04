@@ -58,6 +58,7 @@ safe_auc <- function(labels, probs){
 }
 
 #* Fit seroCOP model
+#* @param csv_text The CSV content as text
 #* @param infected_col The name of the binary outcome column (default "infected")
 #* @param titre_col The biomarker/titre column for single-biomarker fits (optional)
 #* @param family Logistic by default; currently only binary
@@ -65,63 +66,19 @@ safe_auc <- function(labels, probs){
 #* @param iter Iterations per chain
 #* @post /fit
 #* @serializer unboxedJSON
-function(req, res, infected_col="infected", titre_col=NULL, family="bernoulli", chains=2, iter=1000){
+function(req, res, csv_text, infected_col="infected", titre_col=NULL, family="bernoulli", chains=2, iter=1000){
   tryCatch({
-    # Get the uploaded CSV file from the raw POST body
-    if(is.null(req$postBody) || length(req$postBody) == 0){
+    # Expect CSV content as text
+    if(is.null(csv_text) || nchar(csv_text) == 0){
       res$status <- 400
-      return(list(error="No file data received"))
-    }
-    
-    # Parse multipart form data manually
-    content_type <- req$HTTP_CONTENT_TYPE
-    if(!grepl("multipart/form-data", content_type, fixed=TRUE)){
-      res$status <- 400
-      return(list(error="Expected multipart/form-data content type"))
-    }
-    
-    # Extract boundary from content type
-    boundary_match <- regexpr("boundary=([^;]+)", content_type)
-    if(boundary_match == -1){
-      res$status <- 400
-      return(list(error="No boundary found in content type"))
-    }
-    boundary <- sub("boundary=", "", regmatches(content_type, boundary_match))
-    
-    # Convert to character if raw
-    if(is.raw(req$postBody)){
-      post_text <- rawToChar(req$postBody)
-    } else {
-      post_text <- as.character(req$postBody)
-    }
-    
-    # Split postBody by boundary to find CSV part
-    parts <- strsplit(post_text, paste0("--", boundary))[[1]]
-    
-    csv_content <- NULL
-    for(part in parts){
-      if(grepl('name="csv"', part, fixed=TRUE)){
-        # Extract content after headers (double newline)
-        content_start <- regexpr("\r\n\r\n", part)
-        if(content_start > 0){
-          csv_content <- substring(part, content_start + 4)
-          # Remove trailing boundary markers
-          csv_content <- sub("\r\n$", "", csv_content)
-          break
-        }
-      }
-    }
-    
-    if(is.null(csv_content)){
-      res$status <- 400
-      return(list(error="Could not find CSV file in multipart data"))
+      return(list(error="Missing csv_text parameter"))
     }
     
     # Write to temp file and read
     csv_path <- tempfile(fileext = ".csv")
-    writeLines(csv_content, csv_path)
+    writeLines(csv_text, csv_path)
     
-    cat("Reading CSV file from:", csv_path, "\n")
+    cat("Reading CSV file from temp location\n")
     df <- readr::read_csv(csv_path, show_col_types = FALSE)
     cat("Data loaded:", nrow(df), "rows,", ncol(df), "cols\n")
     cat("Column names:", paste(names(df), collapse=", "), "\n")
