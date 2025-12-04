@@ -1,35 +1,29 @@
 # Dockerfile for seroCOP-api with brms/Stan
-FROM rocker/r-ver:4.3.1
+# Use rocker/verse which has many packages pre-installed
+FROM rocker/verse:4.3.1
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies
+# Install additional system dependencies
 RUN apt-get update && apt-get install -y \
-    libcurl4-openssl-dev \
-    libssl-dev \
-    libxml2-dev \
-    libfontconfig1-dev \
-    libfreetype6-dev \
-    libpng-dev \
-    libjpeg-dev \
     libsodium-dev \
-    pandoc \
+    cmake \
     && rm -rf /var/lib/apt/lists/*
 
-# Install R packages one by one to catch errors
-# Show detailed output for plumber installation
-RUN R -e "options(warn=2); install.packages('plumber', repos='https://cloud.r-project.org', dependencies=TRUE)"
+# Install plumber (verse doesn't have it)
+RUN install2.r --error --skipinstalled \
+    plumber \
+    pROC \
+    base64enc \
+    loo
 
-RUN R -e "install.packages(c('jsonlite','readr','dplyr','tidyr','ggplot2','pROC','base64enc'), repos='https://cloud.r-project.org', Ncpus=4, dependencies=TRUE)"
+# Install Stan and brms (this takes time)
+RUN install2.r --error --skipinstalled --ncpus -1 \
+    rstan \
+    brms
 
-# Install brms dependencies
-RUN R -e "install.packages('loo', repos='https://cloud.r-project.org', Ncpus=4, dependencies=TRUE)"
-RUN R -e "install.packages('rstan', repos='https://cloud.r-project.org', Ncpus=4, dependencies=TRUE)"
-RUN R -e "install.packages('brms', repos='https://cloud.r-project.org', Ncpus=4, dependencies=TRUE)"
-
-# Install remotes and seroCOP
-RUN R -e "install.packages('remotes', repos='https://cloud.r-project.org', dependencies=TRUE)"
-RUN R -e "remotes::install_github('seroanalytics/seroCOP')" || echo "seroCOP install optional"
+# Install seroCOP from GitHub
+RUN R -e "remotes::install_github('seroanalytics/seroCOP')" || echo "seroCOP optional"
 
 WORKDIR /app
 COPY plumber.R /app/plumber.R
