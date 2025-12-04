@@ -74,12 +74,10 @@ function(req, res, csv_text, infected_col="infected", titre_col=NULL, family="be
       return(list(error="Missing csv_text parameter"))
     }
     
-    # Write to temp file and read
-    csv_path <- tempfile(fileext = ".csv")
-    writeLines(csv_text, csv_path)
+    cat("Received CSV text, length:", nchar(csv_text), "\n")
     
-    cat("Reading CSV file from temp location\n")
-    df <- readr::read_csv(csv_path, show_col_types = FALSE)
+    # Read directly from text using readr
+    df <- readr::read_csv(csv_text, show_col_types = FALSE)
     cat("Data loaded:", nrow(df), "rows,", ncol(df), "cols\n")
     cat("Column names:", paste(names(df), collapse=", "), "\n")
     
