@@ -58,17 +58,22 @@ safe_auc <- function(labels, probs){
 }
 
 #* Fit seroCOP model
-#* @param csv_text The CSV content as text
-#* @param infected_col The name of the binary outcome column (default "infected")
-#* @param titre_col The biomarker/titre column for single-biomarker fits (optional)
-#* @param family Logistic by default; currently only binary
-#* @param chains Number of chains
-#* @param iter Iterations per chain
 #* @post /fit
 #* @serializer unboxedJSON
-function(req, res, csv_text, infected_col="infected", titre_col=NULL, family="bernoulli", chains=2, iter=1000){
+function(req, res){
   tryCatch({
-    # Expect CSV content as text
+    # Parse JSON body manually
+    body <- jsonlite::fromJSON(rawToChar(req$postBody))
+    
+    cat("Request body keys:", paste(names(body), collapse=", "), "\n")
+    
+    csv_text <- body$csv_text
+    infected_col <- if(!is.null(body$infected_col)) body$infected_col else "infected"
+    titre_col <- body$titre_col
+    chains <- if(!is.null(body$chains)) as.integer(body$chains) else 2L
+    iter <- if(!is.null(body$iter)) as.integer(body$iter) else 1000L
+    
+    # Validate CSV text
     if(is.null(csv_text) || nchar(csv_text) == 0){
       res$status <- 400
       return(list(error="Missing csv_text parameter"))
@@ -76,10 +81,8 @@ function(req, res, csv_text, infected_col="infected", titre_col=NULL, family="be
     
     cat("Received CSV text, length:", nchar(csv_text), "\n")
     cat("First 200 chars:", substr(csv_text, 1, 200), "\n")
-    cat("Class:", class(csv_text), "\n")
     
     # Use base R read.csv with text parameter
-    # This handles single string input better than readr
     df <- read.csv(text = csv_text, stringsAsFactors = FALSE)
     
     cat("Data loaded:", nrow(df), "rows,", ncol(df), "cols\n")
