@@ -20,15 +20,23 @@ function(req, res) {
   allowed_origins <- c(
     "https://seroanalytics.github.io",
     "https://seroanalytics.org",
-    "http://localhost:8000"  # for local dev
+    "http://seroanalytics.org",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000"
   )
   
-  if (origin %in% allowed_origins) {
+  cat("CORS: Request from origin:", origin, "\n")
+  
+  if (!is.null(origin) && origin %in% allowed_origins) {
     res$setHeader("Access-Control-Allow-Origin", origin)
+    res$setHeader("Access-Control-Allow-Credentials", "true")
+  } else if (!is.null(origin)) {
+    cat("CORS: Origin not in allowed list:", origin, "\n")
   }
   
-  res$setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-  res$setHeader("Access-Control-Allow-Headers", "Content-Type")
+  res$setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+  res$setHeader("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization")
+  res$setHeader("Access-Control-Max-Age", "86400")
   
   if (req$REQUEST_METHOD == "OPTIONS") {
     res$status <- 200
