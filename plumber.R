@@ -90,17 +90,20 @@ function(req, res){
     }
     
     cat("Received CSV text, length:", nchar(csv_text), "\n")
-    cat("First 200 chars:", substr(csv_text, 1, 200), "\n")
+    cat("First 500 chars:", substr(csv_text, 1, 500), "\n")
+    cat("Last 200 chars:", substr(csv_text, nchar(csv_text)-199, nchar(csv_text)), "\n")
     
     # Use base R read.csv with text parameter
     df <- read.csv(text = csv_text, stringsAsFactors = FALSE)
     
     cat("Data loaded:", nrow(df), "rows,", ncol(df), "cols\n")
     cat("Column names:", paste(names(df), collapse=", "), "\n")
+    cat("First row:", paste(df[1,], collapse=", "), "\n")
     
     if(!infected_col %in% names(df)){
       res$status <- 400
-      return(list(error=sprintf("Missing infected_col '%s' in data", infected_col)))
+      return(list(error=sprintf("Missing infected_col '%s' in data. Columns found: %s", 
+                                infected_col, paste(names(df), collapse=", "))))
     }
     df <- df |> dplyr::mutate(!!infected_col := as.integer(.data[[infected_col]]))
 
