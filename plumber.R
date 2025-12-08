@@ -76,8 +76,17 @@ function(req, res, csv_text, infected_col="infected", titre_col=NULL, family="be
     
     cat("Received CSV text, length:", nchar(csv_text), "\n")
     
-    # Read directly from text using readr
-    df <- readr::read_csv(csv_text, show_col_types = FALSE)
+    # Write to temporary file first, then read
+    # readr::read_csv needs a file path or connection, not raw text
+    temp_csv <- tempfile(fileext = ".csv")
+    writeLines(csv_text, temp_csv)
+    
+    cat("Reading CSV from temp file:", temp_csv, "\n")
+    df <- readr::read_csv(temp_csv, show_col_types = FALSE)
+    
+    # Clean up temp file
+    unlink(temp_csv)
+    
     cat("Data loaded:", nrow(df), "rows,", ncol(df), "cols\n")
     cat("Column names:", paste(names(df), collapse=", "), "\n")
     
