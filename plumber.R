@@ -60,11 +60,13 @@ safe_auc <- function(labels, probs){
 #* Fit seroCOP model
 #* @post /fit
 #* @serializer unboxedJSON
+#* @parser json
 function(req, res){
   tryCatch({
-    # Parse JSON body manually
-    body <- jsonlite::fromJSON(rawToChar(req$postBody))
+    # req$body will be automatically parsed as JSON by plumber
+    body <- req$body
     
+    cat("Request body class:", class(body), "\n")
     cat("Request body keys:", paste(names(body), collapse=", "), "\n")
     
     csv_text <- body$csv_text
@@ -74,9 +76,17 @@ function(req, res){
     iter <- if(!is.null(body$iter)) as.integer(body$iter) else 1000L
     
     # Validate CSV text
-    if(is.null(csv_text) || nchar(csv_text) == 0){
+    if(is.null(csv_text)){
       res$status <- 400
       return(list(error="Missing csv_text parameter"))
+    }
+    
+    # Handle if csv_text comes as array
+    if(is.list(csv_text)) csv_text <- paste(unlist(csv_text), collapse="\n")
+    
+    if(nchar(csv_text) == 0){
+      res$status <- 400
+      return(list(error="Empty csv_text parameter"))
     }
     
     cat("Received CSV text, length:", nchar(csv_text), "\n")
