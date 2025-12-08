@@ -75,9 +75,12 @@ function(req, res, csv_text, infected_col="infected", titre_col=NULL, family="be
     }
     
     cat("Received CSV text, length:", nchar(csv_text), "\n")
+    cat("First 200 chars:", substr(csv_text, 1, 200), "\n")
+    cat("Class:", class(csv_text), "\n")
     
-    # Use textConnection to read CSV directly from string
-    df <- readr::read_csv(textConnection(csv_text), show_col_types = FALSE)
+    # Use base R read.csv with text parameter
+    # This handles single string input better than readr
+    df <- read.csv(text = csv_text, stringsAsFactors = FALSE)
     
     cat("Data loaded:", nrow(df), "rows,", ncol(df), "cols\n")
     cat("Column names:", paste(names(df), collapse=", "), "\n")
