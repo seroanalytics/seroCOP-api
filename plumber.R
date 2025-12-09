@@ -185,7 +185,7 @@ function(req, res){
         loo = if(!is.null(loo_res)) list(elpd = loo_res$estimates["elpd_loo","Estimate"],
                                          p_loo = loo_res$estimates["p_loo","Estimate"]) else NULL
       ),
-      summaries = summ |> tibble::as_tibble() |> dplyr::mutate(term = rownames(summ)) |> jsonlite::toJSON(auto_unbox = TRUE),
+      summaries = as.data.frame(summ) |> dplyr::mutate(term = rownames(summ)) |> jsonlite::toJSON(auto_unbox = TRUE),
       protection_curve = prot_df,
       protection_curve_plot = serialize_plot(prot_plot),
       posterior_draws = head(draws, 1000) # downsample for payload size
