@@ -133,29 +133,29 @@ function(req, res){
     
     cat("Using titre column:", titre_col, "\n")
 
-    # Build a simple brms formula analogous to SeroCOP single biomarker
+    # Fit brms Bayesian logistic model
     form <- stats::as.formula(sprintf("%s ~ s(%s)", infected_col, titre_col))
-    cat("Fitting model with formula:", deparse(form), "\n")
+    cat("Fitting brms model with formula:", deparse(form), "\n")
 
-    # Fit via brms (backend is Stan, runs on server)
     fit <- brms::brm(
       formula = form,
       data = df,
-      family = brms::bernoulli(link = "logit"),
+      family = bernoulli(link = "logit"),
       chains = as.integer(chains),
       iter = as.integer(iter),
-      cores = max(1L, parallel::detectCores() - 1L),
-      refresh = 0
+      cores = 1,
+      refresh = 0,
+      silent = 2
     )
     
     cat("Model fit complete\n")
 
-    # Extract posterior draws and summaries
-    draws <- brms::as_draws_df(fit)
-    summ <- brms::posterior_summary(fit)
-    loo_res <- tryCatch({
-      brms::loo(fit)
-    }, error=function(e) NULL)
+    # Extract summary and draws
+    summ <- brms::fixef(fit)
+    draws <- as.data.frame(brms::as_draws_df(fit))
+    
+    # LOO cross-validation
+    loo_res <- tryCatch(loo::loo(fit), error = function(e) { cat("LOO failed:", e$message, "\n"); NULL })
 
     # Protection curve: predicted probability over a grid of titre
     grid <- data.frame(!!titre_col := seq(min(df[[titre_col]], na.rm=TRUE),
